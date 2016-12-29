@@ -1,10 +1,10 @@
-This Gist is about how I use PyAudio, NumPy, and Matplotlib to plot freqency spectrum of system sound or microphone.
+This Gist is about how to use use pyaudio and other to do real time audio processing
 
-You can read this `blog post`_ for more detail or watch `this video`__:
+I have use some code from this `blog post`_
+
 
 .. _blog post: http://blog.yjl.im/2012/11/frequency-spectrum-of-sound-using.html
-__ video_
-.. _video: https://www.youtube.com/watch?v=hiGB_AP6iTo
 
-.. figure:: https://i.ytimg.com/vi/hiGB_AP6iTo/maxresdefault.jpg
-   :target: video_
+
+
+
