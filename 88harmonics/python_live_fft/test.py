@@ -7,6 +7,9 @@ import struct
 import time
 from parabolic import parabolic
 
+from obspy.signal.filter import bandstop
+
+
 soundObject = pa.PyAudio()
 
 nFFT = 1028
@@ -20,28 +23,24 @@ fulldata = np.array([])
 dry_data = np.array([])
 
 
-def readstream(inStream):
+def fftBlack(y):
     """
-    read stream depreciated
-    :param inStream:
-    :return: return right
+    do fft with blackmanharris window
+    :param y: audio in
+    :return: freq domain
     """
-    numberOfValues = max(stream.get_read_available() / nFFT, 1) * nFFT / 2
-    data = inStream.read(int(numberOfValues))
-    #print(len(data))
-    #y = np.array(struct.unpack("%dh" % (2 * numberOfValues * CHANNELS), data))
-    y = np.fromstring(data, dtype=np.float32)
-    y_L = y[::2]
-    y_R = y[1::2]
+    n = len(y)  # length of the signal
+    y = y * signal.blackmanharris(len(y))
+    Y = fft(y) / n  # fft computing and normalization
+    Y = Y[range(int(n / 2))]
+    return Y,
 
-
-    return y_R,
 
 def plotSpectrum(y, Fs):
     """
     Plots a Single-Sided Amplitude Spectrum of y(t)
-    :param y:
-    :param Fs:
+    :param y: audio data
+    :param Fs:Rate
     :return:
     """
     n = len(y)  # length of the signal
@@ -56,7 +55,7 @@ def plotSpectrum(y, Fs):
     plot(frq, abs(Y), 'r')  # plotting the spectrum
     xlabel('Freq (Hz)')
     ylabel('|Y(freq)|')
-    #show()
+    show()
     return Y,
 
 def findFreq(spec):
@@ -69,13 +68,35 @@ def findFreq(spec):
     # i : indice of max amp
     i = np.argmax(spec[0])
     i = parabolic(np.log(spec[0]), i)[0]
-    return RATE * i / len(spec[0]),
+    return RATE * i / len(spec[0]), i
+
+
+def harmonicMode(data, freq):
+    """
+    suppress fundamental
+    :param data: frequence
+    :param freq: center of filter
+    :return: filtered data
+    """
+    freqMin = freq * 0, 9
+    freqMax = freq * 1, 1
+    return bandstop(data, freqMin, freqMax, RATE)
+
 
 def callback(in_data, frame_count, time_info, flag):
+    """
+
+    :param in_data:
+    :param frame_count:
+    :param time_info:
+    :param flag:
+    :return: audio_data
+    """
     global b, a, fulldata, dry_data, frames
     audio_data = np.fromstring(in_data, dtype=np.float32)
-    #do processing here
-    fulldata = np.append(fulldata,audio_data)
+    # do processing here
+
+    # fulldata = np.append(fulldata,audio_data)
     return (audio_data, pa.paContinue)
 
 
@@ -86,15 +107,16 @@ stream = soundObject.open(format=FORMAT,
                           frames_per_buffer=BUF_SIZE,
                           stream_callback=callback)
 
-while stream.is_active():
-    print("actif")
-    time.sleep(2)
-    stream.stop_stream()
-stream.close()
+if __name__ == '__main__':
+    while stream.is_active():
+        print("actif")
+        time.sleep(2)
+        stream.stop_stream()
+    stream.close()
 
-frames = np.hstack(fulldata)
+    frames = np.hstack(fulldata)
 
-    #readData = readstream(stream)
+    # readData = readstream(stream)
 
     # i = 0
     # frames = []
@@ -106,8 +128,7 @@ frames = np.hstack(fulldata)
     # #Y_R = np.fft.fft(readData, nFFT)
     #
 
-spectrum = plotSpectrum(frames, RATE)
+    spectrum = plotSpectrum(frames, RATE)
 
-
-#stream.close()
-soundObject.terminate()
+    # stream.close()
+    soundObject.terminate()
