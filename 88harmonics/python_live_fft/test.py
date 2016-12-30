@@ -7,7 +7,7 @@ import struct
 import time
 from parabolic import parabolic
 
-from obspy.signal.filter import bandstop
+from obspy.signal.filter import bandstop, highpass
 
 
 soundObject = pa.PyAudio()
@@ -111,10 +111,10 @@ def harmonicMode(data, freq):
     :param freq: center of filter
     :return: filtered data
     """
-    freqMin = int(freq * 0.9)
-    freqMax = int(freq * 1.1)
-    return bandstop(data, freqMin, freqMax, RATE)
-
+    # freqMin = int(freq * 0.9)
+    # freqMax = int(freq * 1.1)
+    # return bandstop(data, freqMin, freqMax, RATE)
+    return highpass(data, freq * 1.1, RATE, zerophase=True)
 
 def callback(in_data, frame_count, time_info, flag):
     """
@@ -143,6 +143,7 @@ stream = soundObject.open(format=FORMAT,
                           stream_callback=callback)
 
 if __name__ == '__main__':
+    fulldata = np.array([])
     while stream.is_active():
         print("actif")
         time.sleep(1)
