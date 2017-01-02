@@ -2,12 +2,12 @@ import pyaudio as pa
 import numpy as np
 from matplotlib import pyplot as plt
 from pylab import xscale, figure, plot, show, title, xlabel, ylabel, subplot
-from scipy import fft, arange, signal
+from scipy import fft, arange, signal, ifft
 import struct
 import time
 from parabolic import parabolic
 
-from obspy.signal.filter import bandstop
+from obspy.signal.filter import bandstop, highpass
 
 
 soundObject = pa.PyAudio()
@@ -21,7 +21,7 @@ RECORD_SECONDS = 3
 
 fulldata = np.array([])
 dry_data = np.array([])
-
+indiceOfFundamental = 0
 
 def fftBlack(y):
     """
@@ -46,7 +46,7 @@ def plotSpectrum(y, Fs):
     n = len(y)  # length of the signal
     k = arange(n)
     T = n / Fs
-    end = int(n / 10)  # default put n/2
+    end = int(n / 2)  # default put n/2
     frq = k / T  # two sides frequency range
     frq = frq[range(end)]  # one side frequency range
     y = y * signal.blackmanharris(len(y))
@@ -54,7 +54,7 @@ def plotSpectrum(y, Fs):
     Y = Y[range(end)]
     figure(1)
     plot(frq, abs(Y), 'r')  # plotting the spectrum
-    #xscale('log')
+    xscale('log')
     xlabel('Freq (Hz)')
     ylabel('|Y(freq)|')
     # show()
@@ -71,7 +71,7 @@ def plotSpectrum2(y, Fs):
     n = len(y)  # length of the signal
     k = arange(n)
     T = n / Fs
-    end = int(n / 10)  # default n/2
+    end = int(n / 2)  # default n/2
     frq = k / T  # two sides frequency range
     frq = frq[range(end)]  # one side frequency range
     y = y * signal.blackmanharris(len(y))
@@ -80,7 +80,7 @@ def plotSpectrum2(y, Fs):
 
     figure(2)
     plot(frq, abs(Y), 'b')  # plotting the spectrum
-    # xscale('log')
+    xscale('log')
     xlabel('Freq (Hz)')
     ylabel('|Y(freq)|')
     show()
@@ -92,17 +92,54 @@ def findFreq(spec):
     :param spec: full spectrum
     :return: fundamental frequency
     """
+    global indiceOfFundamental
     spec = abs(np.array(spec))
-    # i : indice of max amp
+    # i : indice of max
+    print("spec in findFreq")
+    print(spec)
     try:
         i = np.argmax(spec)
         i = parabolic(np.log(spec), i)[0]
+        indiceOfFundamental = int(i)
         return RATE * i / len(spec)
     except IndexError:
         i = np.argmax(spec[0])
         i = parabolic(np.log(spec[0]), i)[0]
+        indiceOfFundamental = int(i)
         return RATE * i / len(spec[0])
 
+
+
+def amplificationHarmonic(data):
+    """
+    call findFreq before this method
+    This method amplify the value of the
+    :param data:
+    :return:
+    """
+    shift = 50
+    numberOfPoints = shift*2
+    gaussian = signal.gaussian(numberOfPoints, std=7)
+    dataFreq = fftBlack(data)
+    dataFreq = dataFreq[0]
+    print("lenght of data")
+    print(len(dataFreq))
+    for i in range(numberOfPoints):
+        try:
+            print("index")
+            print(indiceOfFundamental * 2 - shift + i)
+            print("before")
+
+            print(dataFreq[indiceOfFundamental*2-shift+i])
+            dataFreq[indiceOfFundamental*2-shift+i] += dataFreq[indiceOfFundamental*2-shift+i]*10**(5*gaussian[i])
+            print("after")
+            print(dataFreq[indiceOfFundamental * 2 - shift + i])
+            print("")
+        except IndexError:
+            print("index error")
+    #print(np.real(ifft(dataFreq)))
+    result = np.real(ifft(dataFreq))
+    return result
 
 def harmonicMode(data, freq):
     """
@@ -113,7 +150,11 @@ def harmonicMode(data, freq):
     """
     freqMin = int(freq * 0.9)
     freqMax = int(freq * 1.1)
-    return bandstop(data, freqMin, freqMax, RATE)
+    #return bandstop(data, freqMin, freqMax, RATE, zerophase=True)
+    data = highpass(data, freq, RATE, zerophase=True)
+    print("indiceOfFundamental")
+    print(indiceOfFundamental)
+    return amplificationHarmonic(data)
 
 
 def callback(in_data, frame_count, time_info, flag):
