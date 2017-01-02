@@ -1,6 +1,7 @@
 import pyaudio as pa
 import numpy as np
 from matplotlib import pyplot as plt
+from matplotlib.mlab import find
 from pylab import xscale, figure, plot, show, title, xlabel, ylabel, subplot
 from scipy import fft, arange, signal, ifft
 import struct
@@ -86,20 +87,32 @@ def plotSpectrum2(y, Fs):
     show()
     return Y,
 
-def findFreq(spec):
+def findFreq(spec, inFreq = True):
     """
 
     :param spec: full spectrum
+    :param inFreq:
     :return: fundamental frequency
     """
     global indiceOfFundamental
-    spec = abs(np.array(spec))
+
+
+    if not(inFreq):
+        spec = abs(np.array(fftBlack(spec)))
+    else:
+        spec = abs(np.array(spec))
+
     # i : indice of max
     print("spec in findFreq")
     print(spec)
+
     try:
         i = np.argmax(spec)
+        print("i in findFreq")
+        print(i)
         i = parabolic(np.log(spec), i)[0]
+        print("i parabolic")
+        print(i)
         indiceOfFundamental = int(i)
         return RATE * i / len(spec)
     except IndexError:
@@ -107,6 +120,27 @@ def findFreq(spec):
         i = parabolic(np.log(spec[0]), i)[0]
         indiceOfFundamental = int(i)
         return RATE * i / len(spec[0])
+
+# def freq_from_autocorr(sig):
+#     """
+#     Estimate frequency using autocorrelation
+#     """
+#     # Calculate autocorrelation (same thing as convolution, but with
+#     # one input reversed in time), and throw away the negative lags
+#     corr = signal.fftconvolve(sig, sig[::-1], mode='full')
+#     corr = corr[len(corr)//2:]
+#
+#     # Find the first low point
+#     d = np.diff(corr)
+#     start = find(d > 0)[0]
+#
+#     # Find the next peak after the low point (other than 0 lag).  This bit is
+#     # not reliable for long signals, due to the desired peak occurring between
+#     # samples, and other peaks appearing higher.
+#     # Should use a weighting function to de-emphasize the peaks at longer lags.
+#     peak = np.argmax(corr[start:]) + start
+#     px, py = parabolic(corr, peak)
+#     return RATE / px
 
 
 
@@ -206,7 +240,7 @@ if __name__ == '__main__':
     # #Y_R = np.fft.fft(readData, nFFT)
     #
     # filter response
-    freqC = findFreq(frames)
+    freqC = findFreq(frames, False)
     b, a = signal.butter(4, (0.9 * freqC, 1.1 * freqC), 'bandstop', analog=True)
     w, h = signal.freqs(b, a)
     plt.figure(3)
@@ -222,9 +256,9 @@ if __name__ == '__main__':
     # tests
     print("ploting")
     spectrum = plotSpectrum(frames, RATE)
-    print("freq")
-    print(findFreq(frames))
-    spectrum = plotSpectrum2(harmonicMode(frames, findFreq(frames)),RATE)
+    print("freq FindFreq")
+    print(findFreq(frames, False))
+    spectrum = plotSpectrum2(harmonicMode(frames, findFreq(frames, False)), RATE)
 
 
     # stream.close()
