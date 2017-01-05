@@ -1,11 +1,6 @@
 import pyaudio as pa
 import numpy as np
-from matplotlib import pyplot as plt
-from matplotlib.mlab import find
-from pylab import xscale, figure, plot, show, title, xlabel, ylabel, subplot
-from scipy import fft, arange, signal, ifft
-import struct
-import time
+from scipy import fft, signal, ifft
 from parabolic import parabolic
 from obspy.signal.filter import bandstop, highpass
 from bluetooth import *
@@ -18,7 +13,7 @@ BUF_SIZE = 4 * nFFT
 FORMAT = pa.paFloat32
 CHANNELS = 2
 RATE = 44100
-RECORD_SECONDS = 3
+
 
 # bluetooth config
 
@@ -28,8 +23,11 @@ PORT =  3              # Server port
 #global variable
 indiceOfFundamental = 0
 harmonic = False
+isharmonic = False
+washarmonic = False
 freq = 440
-
+freqFund = 440
+runOnce = False
 
 def fftBlack(y):
     """
@@ -127,6 +125,24 @@ def harmonicMode(data, freq):
     return amplificationHarmonic(data)
 
 
+def encodeData(frequency, harmonicmode):
+    """
+
+    :param frequency: int
+    :param harmonicmode: boolean
+    :return:
+    """
+    strFreq = str(frequency)
+    nbDigits = len(strFreq)
+    data=""
+    if nbDigits < 6:
+        data = (6-nbDigits)*"0"
+    if harmonicmode:
+        data = data + strFreq + "1"
+    else:
+        data = data + strFreq + "0"
+    return data
+
 def callback(in_data, frame_count, time_info, flag):
     """
 
@@ -136,7 +152,7 @@ def callback(in_data, frame_count, time_info, flag):
     :param flag:
     :return: audio_data
     """
-    global freq
+    global freq, freqFund
     audio_data = np.fromstring(in_data, dtype=np.float32)
     # do processing here
     # audioInFreq = fftBlack(audio_data)
@@ -144,10 +160,10 @@ def callback(in_data, frame_count, time_info, flag):
     # only for time domain
     spec = abs(np.array(fftBlack(audio_data)))
     freq = findFreq(spec)
-
     if harmonic:
 
-        spec = harmonicMode(audio_data, freq)
+        spec = harmonicMode(audio_data, freqFund)
+
     else:
         spec = audio_data
     stream.write(spec)
@@ -167,9 +183,17 @@ s.connect((HOST, PORT))
 
 if __name__ == '__main__':
     while stream.is_active():
-        s.send()
-        print("actif")
+        s.send(encodeData(freq, isharmonic))
+        #print("actif")
         #time.sleep(1)
+        isharmonic = s.recv(1024)
+        print(isharmonic)
+        #supposed that harmonic = 1 or 0
+        if isharmonic != washarmonic and isharmonic:
+            freqFund = freq
+        elif isharmonic == washarmonic and isharmonic:
+            freqFund = freq // 2
+
     stream.stop_stream()
     stream.close()
 
