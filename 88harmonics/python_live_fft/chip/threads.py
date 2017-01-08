@@ -240,12 +240,12 @@ class Dataanalysis(Thread):
                 washarmonic = False
 
             if harmonic:
-                    handleddata.put(harmonicMode(audio_data, freqFund))
+                    self.handleddata.put(harmonicMode(audio_data, freqFund))
 
             else:
                 #indiceOfFundamental = indiceOfFundamental // 2
                 #spec = amplificationHarmonic(audio_data)
-                handleddata = audio_data
+                self.handleddata.put(audio_data)
 
 
 class Writedata(Thread):
