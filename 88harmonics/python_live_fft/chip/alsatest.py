@@ -1,20 +1,17 @@
-import pyaudio as pa
+import alsaaudio as a
+import random
+import struct
 import numpy as np
 from scipy import fft, signal, ifft
 from parabolic import parabolic
 from obspy.signal.filter import bandstop, highpass
 from bluetooth import *
-from subprocess import call
-from time import time
 
-#pyaudio config
-soundObject = pa.PyAudio()
-
-nFFT = 1028
-BUF_SIZE = 4 * nFFT
-FORMAT = pa.paFloat32
+#alsa variables
+BUFFER_SIZE = 1024
 CHANNELS = 1
 RATE = 44100
+FORMAT = a.PCM_FORMAT_S16_LE
 
 
 # bluetooth config
@@ -22,7 +19,7 @@ RATE = 44100
 HOST = "A4:D1:8C:D2:52:39"      # The remote host
 PORT =  3              # Server port
 
-#global variable
+#global variables
 indiceOfFundamental = 0
 harmonic = False
 isharmonic = False
@@ -31,6 +28,21 @@ freq = 440
 freqFund = 440
 runOnce = False
 delaiinit = 10
+
+deviceout = a.PCM()
+
+deviceout.setchannels(CHANNELS)
+deviceout.setrate(RATE)
+deviceout.setformat(FORMAT)
+deviceout.setperiodsize(BUFFER_SIZE)
+
+
+devicein = a.PCM()
+
+devicein.setchannels(CHANNELS)
+devicein.setrate(RATE)
+devicein.setformat(FORMAT)
+devicein.setperiodsize(BUFFER_SIZE)
 
 
 def fftBlack(y):
@@ -76,11 +88,7 @@ def findFreq(spec, inFreq = True):
         return RATE * i / len(spec)
     except IndexError:
         i = np.argmax(spec[0])
-        print("inside except : in findFreq")
-        print(i)
         i = parabolic(np.log(spec[0]), i)[0]
-        print("inside except : in parabolic")
-        print(i)
         indiceOfFundamental = int(i)
         return RATE * i / len(spec[0])
 
@@ -151,55 +159,34 @@ def encodeData(frequency, harmonicmode):
         data = data + strFreq + "0"
     return data
 
-def callback(in_data, frame_count, time_info, flag):
-    """
-
-    :param in_data:
-    :param frame_count:
-    :param time_info:
-    :param flag:
-    :return: audio_data
-    """
-    global freq, freqFund, debut, delaiinit
-    if time() - debut > delaiinit:
-        audio_data = np.fromstring(in_data, dtype=np.float32)
-        # do processing here
-        # audioInFreq = fftBlack(audio_data)
-        # fulldata = abs(np.fft.ifft(harmonicMode(audioInFreq, findFreq(audioInFreq))))
-        # only for time domain
-        spec = abs(np.array(fftBlack(audio_data)))
-        freq = findFreq(spec)
-        if harmonic:
-
-            spec = harmonicMode(audio_data, freqFund)
-
-        else:
-            spec = audio_data
-        stream.write(spec)
-    return (in_data, pa.paContinue)
-
+def str_to_bool(s):
+    if s == 'True':
+         return True
+    elif s == 'False':
+         return False
+    else:
+         raise ValueError
 
 if __name__ == '__main__':
+    isharmonic = input("isharmonic ? : ")
+    isharmonic = str_to_bool(isharmonic)
+    while True:
+        #send data through bluetooth to MAX/MSP
+        #s = BluetoothSocket(RFCOMM)
 
-    s = BluetoothSocket(RFCOMM)
+        #s.connect((HOST, PORT))
 
-    s.connect((HOST, PORT))
-    debut = time()
-    stream = soundObject.open(format=FORMAT,
-                              channels=CHANNELS,
-                              rate=RATE,
-                              input=True,
-                              input_device_index=18,
-                              output=True,
-                              frames_per_buffer=BUF_SIZE,
-                              stream_callback=callback)
-
-    while stream.is_active():
-        s.send(encodeData(freq, isharmonic))
-        #print("actif")
-        #time.sleep(1)
-        isharmonic = s.recv(1024)
+        # s.send(encodeData(freq, isharmonic))
+        # #print("actif")
+        # #time.sleep(1)
+        # isharmonic = s.recv(1024)
         print(isharmonic)
+
+        l, data = devicein.read()
+        audio_data= np.fromstring(data, dtype='int16')
+
+        spec = abs(np.array(fftBlack(audio_data)))
+        freq = findFreq(spec)
         #supposed that harmonic = 1 or 0
         if isharmonic != washarmonic and isharmonic:
             freqFund = freq
@@ -209,7 +196,11 @@ if __name__ == '__main__':
         elif isharmonic != washarmonic and not(isharmonic):
             washarmonic = False
 
-    stream.stop_stream()
-    stream.close()
+        if harmonic:
 
-    soundObject.terminate()
+            spec = harmonicMode(audio_data, freqFund)
+
+        else:
+            spec = audio_data
+
+        deviceout.write(spec.tobytes())

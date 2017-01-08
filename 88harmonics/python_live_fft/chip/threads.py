@@ -98,21 +98,20 @@ def amplificationHarmonic(data):
     gaussian = signal.gaussian(numberOfPoints, std=7)
     dataFreq = fftBlack(data)
     dataFreq = dataFreq[0]
-    print("lenght of data")
-    print(len(dataFreq))
+    print("lenght of data in amp harmo", len(data))
     for i in range(numberOfPoints):
         try:
-            print("index")
-            print(indiceOfFundamental * 2 - shift + i)
-            print("before")
+            #print("index")
+            #print(indiceOfFundamental * 2 - shift + i)
+            #print("before")
 
-            print(dataFreq[indiceOfFundamental*2-shift+i])
+            #print(dataFreq[indiceOfFundamental*2-shift+i])
             dataFreq[indiceOfFundamental*2-shift+i] += dataFreq[indiceOfFundamental*2-shift+i]*10**(5*gaussian[i])
-            print("after")
-            print(dataFreq[indiceOfFundamental * 2 - shift + i])
-            print("")
+            #print("after")
+            #print(dataFreq[indiceOfFundamental * 2 - shift + i])
+            #print("")
         except IndexError:
-            print("index error")
+            print("index error in amp harmo")
     #print(np.real(ifft(dataFreq)))
     result = np.real(ifft(dataFreq))
     return result
@@ -183,12 +182,10 @@ class Readdata(Thread):
         global RATE, BUFFER_SIZE
         while True:
             l, temp = self.inp.read()
-            temp = np.fromstring(temp, dtype='int16')
-            while len(temp) < BUFFER_SIZE:
+            while len(temp) < BUFFER_SIZE*2:
                 print("in while, taille : ",len(temp))
                 l, temp = self.inp.read()
-                temp = np.fromstring(temp, dtype='int16')
-            self.data.put(highpass(temp,
+            self.data.put(highpass(np.fromstring(temp,dtype='int16'),
                                    20,
                                    RATE,
                                    zerophase=True),
@@ -204,7 +201,7 @@ class Dataanalysis(Thread):
     def __init__(self,data, handleddata):
         Thread.__init__(self)
         self.data = data
-        self.handleddata =handleddata
+        self.handleddata = handleddata
     def run(self):
         """Code a executer pendant l'execution du thread."""
         global isharmonic, washarmonic, indiceOfFundamental
@@ -218,7 +215,7 @@ class Dataanalysis(Thread):
             # #print("actif")
             # #time.sleep(1)
             # isharmonic = s.recv(1024)
-            print(isharmonic)
+            print("harmonique mode = ", isharmonic)
             try:
                 audio_data = self.data.get(block=True)
                 tempiffull = audio_data
@@ -239,7 +236,7 @@ class Dataanalysis(Thread):
             elif isharmonic != washarmonic and not(isharmonic):
                 washarmonic = False
 
-            if harmonic:
+            if isharmonic:
                     self.handleddata.put(harmonicMode(audio_data, freqFund))
 
             else:
@@ -266,6 +263,7 @@ class Writedata(Thread):
         self.out.setformat(dataformat)
         self.out.setperiodsize(periodsize)
         self.data = data
+        sleep(0.2)
 
     def run(self):
         """Code a executer pendant l'execution du thread."""
@@ -280,16 +278,19 @@ class Writedata(Thread):
             # #print("actif")
             # #time.sleep(1)
             # isharmonic = s.recv(1024)
+            print("IN RUN OF WRITE")
             try:
                 spec = self.data.get()
                 #save is used to prevent audio signal do be empty
                 #if hendled data hasn't finished
-                self.out.write(spec.tobyte())
+                self.out.write(spec.tobytes())
                 save = spec
 
             except Empty:
+                print("write out queue EMPTY")
                 self.out.write(save.tobytes())
             except Full:
+                print("write out queue FULL")
                 self.out.write(save.tobytes())
 
 
@@ -297,7 +298,7 @@ class Writedata(Thread):
 if __name__ == '__main__':
     #isharmonic = input("isharmonic ? : ")
     #isharmonic = str_to_bool(isharmonic)
-    isharmonic = True
+    #isharmonic = True
     indata = LifoQueue()
     outdata = LifoQueue()
 
@@ -309,7 +310,6 @@ if __name__ == '__main__':
     #start of the threads
     readthread.start()
     handlethread.start()
-    sleep(0.15)
     writethread.start()
 
     #readthread.join()

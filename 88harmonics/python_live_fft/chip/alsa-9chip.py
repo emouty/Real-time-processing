@@ -1,14 +1,14 @@
-import pyaudio as pa
+import alsaaudio
 import numpy as np
 from scipy import fft, signal, ifft
 from parabolic import parabolic
 from obspy.signal.filter import bandstop, highpass
 from bluetooth import *
-from subprocess import call
-from time import time
+import struct
+from threading import Thread
 
 #pyaudio config
-soundObject = pa.PyAudio()
+#soundObject = pa.PyAudio()
 
 nFFT = 1028
 BUF_SIZE = 4 * nFFT
@@ -30,8 +30,6 @@ washarmonic = False
 freq = 440
 freqFund = 440
 runOnce = False
-delaiinit = 10
-
 
 def fftBlack(y):
     """
@@ -76,11 +74,7 @@ def findFreq(spec, inFreq = True):
         return RATE * i / len(spec)
     except IndexError:
         i = np.argmax(spec[0])
-        print("inside except : in findFreq")
-        print(i)
         i = parabolic(np.log(spec[0]), i)[0]
-        print("inside except : in parabolic")
-        print(i)
         indiceOfFundamental = int(i)
         return RATE * i / len(spec[0])
 
@@ -160,23 +154,23 @@ def callback(in_data, frame_count, time_info, flag):
     :param flag:
     :return: audio_data
     """
-    global freq, freqFund, debut, delaiinit
-    if time() - debut > delaiinit:
-        audio_data = np.fromstring(in_data, dtype=np.float32)
-        # do processing here
-        # audioInFreq = fftBlack(audio_data)
-        # fulldata = abs(np.fft.ifft(harmonicMode(audioInFreq, findFreq(audioInFreq))))
-        # only for time domain
-        spec = abs(np.array(fftBlack(audio_data)))
-        freq = findFreq(spec)
-        if harmonic:
+    global freq, freqFund
+    audio_data = np.fromstring(in_data, dtype=np.float32)
+    # do processing here
+    # audioInFreq = fftBlack(audio_data)
+    # fulldata = abs(np.fft.ifft(harmonicMode(audioInFreq, findFreq(audioInFreq))))
+    # only for time domain
+    spec = abs(np.array(fftBlack(audio_data)))
+    freq = findFreq(spec)
+    if harmonic:
 
-            spec = harmonicMode(audio_data, freqFund)
+        spec = harmonicMode(audio_data, freqFund)
 
-        else:
-            spec = audio_data
-        stream.write(spec)
-    return (in_data, pa.paContinue)
+    else:
+        spec = audio_data
+    stream.write(spec)
+    return (audio_data, pa.paContinue)
+
 
 
 if __name__ == '__main__':
@@ -184,15 +178,16 @@ if __name__ == '__main__':
     s = BluetoothSocket(RFCOMM)
 
     s.connect((HOST, PORT))
-    debut = time()
-    stream = soundObject.open(format=FORMAT,
-                              channels=CHANNELS,
-                              rate=RATE,
-                              input=True,
-                              input_device_index=18,
-                              output=True,
-                              frames_per_buffer=BUF_SIZE,
-                              stream_callback=callback)
+
+    # stream = soundObject.open(format=FORMAT,
+    #                           channels=CHANNELS,
+    #                           rate=RATE,
+    #                           input=True,
+    #                           output=True,
+    #                           frames_per_buffer=BUF_SIZE,
+    #                           stream_callback=callback)
+
+
 
     while stream.is_active():
         s.send(encodeData(freq, isharmonic))
@@ -203,11 +198,8 @@ if __name__ == '__main__':
         #supposed that harmonic = 1 or 0
         if isharmonic != washarmonic and isharmonic:
             freqFund = freq
-            washarmonic = True
         elif isharmonic == washarmonic and isharmonic:
             freqFund = freq // 2
-        elif isharmonic != washarmonic and not(isharmonic):
-            washarmonic = False
 
     stream.stop_stream()
     stream.close()
