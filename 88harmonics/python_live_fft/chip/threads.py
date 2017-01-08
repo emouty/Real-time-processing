@@ -1,6 +1,6 @@
 import sys
 from threading import Thread
-from queue import LifoQueue, Full, Empty
+from queue import Queue, LifoQueue, Full, Empty
 import struct
 import alsaaudio as alsa
 import numpy as np
@@ -198,23 +198,15 @@ class Dataanalysis(Thread):
 
     """Thread is for the data analysis"""
 
-    def __init__(self,data, handleddata):
+    def __init__(self,data, handleddata, frequencyqueue):
         Thread.__init__(self)
         self.data = data
         self.handleddata = handleddata
+        self.frequenqueue = frequencyqueue
     def run(self):
         """Code a executer pendant l'execution du thread."""
         global isharmonic, washarmonic, indiceOfFundamental
         while True:
-            #send data through bluetooth to MAX/MSP
-            #s = BluetoothSocket(RFCOMM)
-
-            #s.connect((HOST, PORT))
-
-            # s.send(encodeData(freq, isharmonic))
-            # #print("actif")
-            # #time.sleep(1)
-            # isharmonic = s.recv(1024)
             print("harmonique mode = ", isharmonic)
             try:
                 audio_data = self.data.get(block=True)
@@ -226,7 +218,11 @@ class Dataanalysis(Thread):
                 print("Queue is EMPTY")
                 audio_data = tempiffull
             spec = abs(np.array(fftBlack(audio_data)))
+
             freq = findFreq(spec)
+            #for bluetooth
+            self.frequenqueue.put(freq)
+
             #supposed that harmonic = 1 or 0
             if isharmonic != washarmonic and isharmonic:
                 freqFund = freq
@@ -293,6 +289,35 @@ class Writedata(Thread):
                 print("write out queue FULL")
                 self.out.write(save.tobytes())
 
+class Bluetoothdata(Thread):
+
+    """Thread is for the writting of data"""
+
+    def __init__(self,
+                 frequencyqueue):
+        Thread.__init__(self)
+        self.frequencyqueue = frequencyqueue
+        self.socket =BluetoothSocket(RFCOMM)
+        self.socket.connect((HOST, PORT))
+
+    def run(self):
+        """Code a executer pendant l'execution du thread."""
+        global isharmonic
+        while True:
+            #send data through bluetooth to MAX/MSP
+            try:
+                freq = self.frequencyqueue.get()
+                lastfreqget = freq
+                self.socket.send(encodeData(freq, isharmonic))
+            except Full:
+                self.socket.send(encodeData(lastfreqget,
+                                            isharmonic))
+            except Empty:
+                self.socket.send(encodeData(lastfreqget,
+                                            isharmonic))
+            # #print("actif")
+            # #time.sleep(1)
+            isharmonic = self.socket.recv(1024)
 
 
 if __name__ == '__main__':
@@ -301,16 +326,18 @@ if __name__ == '__main__':
     #isharmonic = True
     indata = LifoQueue()
     outdata = LifoQueue()
-
+    freqqueue = Queue()
     #creation of the threads
     readthread = Readdata(data=indata)
     handlethread = Dataanalysis(data=indata,handleddata=outdata)
     writethread = Writedata(data=outdata)
+    #sendthread = Bluetoothdata(freqqueue)
 
     #start of the threads
     readthread.start()
     handlethread.start()
     writethread.start()
+    #sendthread.start
 
     #readthread.join()
     #writethread.join()
